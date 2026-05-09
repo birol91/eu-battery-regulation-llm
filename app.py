@@ -86,7 +86,7 @@ port = int(os.getenv("PORT", "7860"))
 print("Loading model...")
 llm = Llama(model_path=str(GGUF_PATH), n_gpu_layers=n_gpu_layers, n_ctx=4096, verbose=False)
 retriever = Retriever(index_dir=INDEX_DIR)
-print(f"App ready → http://localhost:{port}")
+print(f"App ready → http://localhost:{port}  (open this in your browser)")
 
 app = FastAPI()
 
@@ -133,4 +133,4 @@ def chat(req: ChatRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=port)
+    uvicorn.run(app, host="127.0.0.1", port=port)
