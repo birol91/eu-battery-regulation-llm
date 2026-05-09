@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>EU-BatteryReg-LLM — Compliance Assistant</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          paper: '#faf9f5',
+          paper2: '#f4f2ea',
+          line: '#e7e3d6',
+          line2: '#d8d3c2',
+          ink: {
+            900: '#1a1f1c',
+            800: '#2a322c',
+            700: '#3d4640',
+            500: '#6b746c',
+            400: '#8a9189',
+          },
+          moss: {
+            50:  '#f1f5ee',
+            100: '#dde8d3',
+            200: '#b9d09f',
+            300: '#8eb46a',
+            400: '#5f8e3f',
+            500: '#467229',
+            600: '#34571f',
+            700: '#283f19',
+          },
+        },
+        fontFamily: {
+          sans: ['Inter', 'system-ui', 'sans-serif'],
+          mono: ['JetBrains Mono', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+<style>
+  html, body { height: 100%; }
+  body {
+    background: #faf9f5;
+    color: #1a1f1c;
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  .scroll-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scroll-thin::-webkit-scrollbar-track { background: transparent; }
+  .scroll-thin::-webkit-scrollbar-thumb { background: #d8d3c2; border-radius: 8px; }
+  .scroll-thin::-webkit-scrollbar-thumb:hover { background: #b8b3a2; }
+  .typing span { animation: typing 1.2s ease-in-out infinite; }
+  .typing span:nth-child(2) { animation-delay: 0.15s; }
+  .typing span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes typing {
+    0%, 100% { opacity: 0.25; transform: translateY(0); }
+    40%      { opacity: 1;    transform: translateY(-3px); }
+  }
+  .fade-in { animation: fadeIn 0.35s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .suggest:hover { background: #f1f5ee; border-color: #b9d09f; }
+  .citation:hover { background: #f1f5ee; border-color: #8eb46a; color: #283f19; }
+  .conv-item:hover { background: #f4f2ea; }
+  .conv-item.active { background: #f1f5ee; color: #283f19; }
+  textarea { resize: none; }
+  textarea::placeholder { color: #8a9189; }
+</style>
+</head>
+<body class="overflow-hidden">
+
+<div class="flex h-screen w-screen">
+
+  <!-- ========== SIDEBAR ========== -->
+  <aside id="sidebar" class="hidden md:flex w-72 shrink-0 flex-col border-r border-line bg-paper">
+
+    <!-- Logo -->
+    <div class="px-5 py-5 flex items-center gap-3">
+      <div class="w-8 h-8 rounded-md bg-moss-500 flex items-center justify-center">
+        <svg viewBox="0 0 24 24" class="w-4 h-4 text-paper" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="7" width="16" height="10" rx="1.5"/>
+          <line x1="22" y1="11" x2="22" y2="13"/>
+          <line x1="6" y1="11" x2="6" y2="13"/>
+          <line x1="10" y1="11" x2="10" y2="13"/>
+          <line x1="14" y1="11" x2="14" y2="13"/>
+        </svg>
+      </div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[14px] font-semibold text-ink-900 leading-tight">EU-BatteryReg</div>
+        <div class="text-[11px] text-ink-500 leading-tight">Compliance Assistant</div>
+      </div>
+    </div>
+
+    <!-- New chat -->
+    <div class="px-3">
+      <button onclick="newChat()" class="w-full flex items-center gap-2 px-3 py-2 rounded-md border border-line hover:border-moss-300 hover:bg-moss-50 text-ink-800 text-[13px] transition">
+        <svg viewBox="0 0 24 24" class="w-4 h-4 text-moss-500" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        <span>New conversation</span>
+        <span class="ml-auto font-mono text-[10px] text-ink-400">⌘N</span>
+      </button>
+    </div>
+
+    <!-- Conversation list -->
+    <div class="flex-1 overflow-y-auto scroll-thin px-2 mt-4">
+      <div class="px-3 pb-1.5 flex items-center justify-between">
+        <span class="text-[10px] uppercase tracking-wider text-ink-400 font-mono">Recent</span>
+        <button onclick="clearRecent()" title="Clear recent" class="text-[10px] font-mono text-ink-400 hover:text-ink-700 transition">clear</button>
+      </div>
+
+      <div id="recent-list">
+        <button class="conv-item active w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-800 truncate">
+          Battery Passport scope &amp; data fields
+        </button>
+        <button class="conv-item w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-700 truncate">
+          Recycling efficiency thresholds 2027
+        </button>
+        <button class="conv-item w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-700 truncate">
+          Due diligence — cobalt &amp; lithium
+        </button>
+        <button class="conv-item w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-700 truncate">
+          Removability requirements (Art. 11)
+        </button>
+        <button class="conv-item w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-700 truncate">
+          ECE R100 Part II vs EU 2023/1542
+        </button>
+        <button class="conv-item w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-700 truncate">
+          UN 38.3 transport testing
+        </button>
+        <button class="conv-item w-full text-left px-3 py-2 rounded-md text-[13px] text-ink-700 truncate">
+          Carbon footprint declaration draft
+        </button>
+      </div>
+    </div>
+
+    <!-- Knowledge summary -->
+    <div class="m-3 p-3 rounded-md border border-line bg-paper2/60">
+      <div class="flex items-center justify-between text-[10px] font-mono uppercase tracking-wider text-ink-400 mb-2">
+        <span>Knowledge base</span>
+        <span class="text-moss-400">●</span>
+      </div>
+      <div class="space-y-1 text-[12px]">
+        <div class="flex justify-between"><span class="text-ink-700">EU 2023/1542</span><span class="font-mono text-ink-500">142p</span></div>
+        <div class="flex justify-between"><span class="text-ink-700">Battery Passport</span><span class="font-mono text-ink-500">7 docs</span></div>
+        <div class="flex justify-between"><span class="text-ink-700">2025 amendments</span><span class="font-mono text-ink-500">3</span></div>
+      </div>
+    </div>
+
+    <!-- User -->
+    <div class="border-t border-line px-3 py-3 flex items-center gap-3">
+      <div class="w-7 h-7 rounded-full bg-moss-500 text-paper flex items-center justify-center text-[12px] font-semibold">B</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-[13px] text-ink-900 truncate">Birol</div>
+        <div class="text-[11px] text-ink-500 truncate">Compliance Engineer</div>
+      </div>
+      <button class="text-ink-400 hover:text-ink-700">
+        <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h0a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h0a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v0a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ========== MAIN ========== -->
+  <main class="flex-1 flex flex-col min-w-0 relative">
+
+    <!-- Top bar -->
+    <header class="flex items-center justify-between px-5 md:px-8 h-14 border-b border-line bg-paper/80 backdrop-blur z-10">
+      <div class="flex items-center gap-3">
+        <button onclick="toggleSidebar()" class="md:hidden text-ink-700 hover:text-ink-900">
+          <svg viewBox="0 0 24 24" class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+
+        <button class="flex items-center gap-2 px-2.5 py-1.5 rounded-md hover:bg-paper2 text-[13px] text-ink-800 transition">
+          <span class="w-1.5 h-1.5 rounded-full bg-moss-400"></span>
+          <span class="font-mono text-[12px]">mistral-7b-batteryreg-lora</span>
+          <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-ink-400" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1">
+        <button title="Sources" class="p-2 rounded-md text-ink-500 hover:text-ink-900 hover:bg-paper2 transition">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        </button>
+        <button title="Export" class="p-2 rounded-md text-ink-500 hover:text-ink-900 hover:bg-paper2 transition">
+          <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        </button>
+        <span class="hidden md:inline-flex items-center gap-1.5 ml-2 text-[10px] font-mono uppercase tracking-wider text-moss-600 px-2 py-0.5 rounded border border-moss-200 bg-moss-50">
+          v1.0
+        </span>
+      </div>
+    </header>
+
+    <!-- Chat scroll area -->
+    <div id="chat-scroll" class="flex-1 overflow-y-auto scroll-thin">
+
+      <!-- Welcome -->
+      <section id="welcome" class="min-h-full">
+        <div class="max-w-2xl mx-auto px-5 md:px-8 pt-24 md:pt-32 pb-12">
+
+          <div class="mb-12 fade-in">
+            <div class="inline-flex items-center gap-2 mb-6 text-[11px] font-mono uppercase tracking-wider text-moss-600">
+              <span class="w-1 h-1 rounded-full bg-moss-400"></span>
+              Domain-tuned · LoRA · 152 docs
+            </div>
+            <h1 class="text-[34px] md:text-[40px] font-semibold tracking-tight text-ink-900 leading-[1.1] mb-4">
+              EU Battery Regulation<br/>
+              <span class="text-moss-500">Compliance Assistant</span>
+            </h1>
+            <p class="text-ink-700 text-[15px] leading-relaxed max-w-lg">
+              Ask anything about Regulation (EU) 2023/1542, the Battery Passport, recycling efficiency, due diligence, and removability — every answer cites the specific article.
+            </p>
+          </div>
+
+          <!-- Suggested prompts -->
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5 mb-10">
+            <button onclick="sendSuggested(this)" data-prompt="Summarize the Battery Passport data fields required for EV batteries placed on the EU market after February 2027." class="suggest text-left p-4 rounded-lg border border-line bg-paper transition">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-moss-500 mb-1.5">Battery Passport</div>
+              <div class="text-[14px] text-ink-900 leading-snug">Required data fields for EV batteries</div>
+            </button>
+
+            <button onclick="sendSuggested(this)" data-prompt="What are the recycling efficiency targets for lithium-ion batteries by 2027 and 2031 under EU 2023/1542?" class="suggest text-left p-4 rounded-lg border border-line bg-paper transition">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-moss-500 mb-1.5">Recycling</div>
+              <div class="text-[14px] text-ink-900 leading-snug">Efficiency targets — 2027 vs 2031</div>
+            </button>
+
+            <button onclick="sendSuggested(this)" data-prompt="Explain the due diligence obligations under Article 47-53 for cobalt and lithium supply chains." class="suggest text-left p-4 rounded-lg border border-line bg-paper transition">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-moss-500 mb-1.5">Due diligence</div>
+              <div class="text-[14px] text-ink-900 leading-snug">Cobalt &amp; lithium supply chains</div>
+            </button>
+
+            <button onclick="sendSuggested(this)" data-prompt="What does EU 2023/1542 require for end-user removability and replaceability of portable batteries?" class="suggest text-left p-4 rounded-lg border border-line bg-paper transition">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-moss-500 mb-1.5">Removability</div>
+              <div class="text-[14px] text-ink-900 leading-snug">Article 11 obligations</div>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Messages -->
+      <div id="messages" class="hidden max-w-2xl mx-auto px-5 md:px-8 pt-8 pb-6 space-y-5"></div>
+    </div>
+
+    <!-- Composer -->
+    <div class="border-t border-line bg-paper">
+      <div class="max-w-2xl mx-auto px-5 md:px-8 py-4">
+        <div class="rounded-xl border border-line bg-white focus-within:border-moss-300 focus-within:ring-1 focus-within:ring-moss-200 transition">
+          <textarea
+            id="prompt-input"
+            rows="1"
+            placeholder="Ask about Article 11, Battery Passport, recycling efficiency…"
+            class="w-full bg-transparent text-ink-900 placeholder:text-ink-400 outline-none px-4 pt-3 pb-1.5 text-[15px] leading-relaxed max-h-48"
+            oninput="autoGrow(this)"
+            onkeydown="onKey(event)"
+          ></textarea>
+
+          <div class="flex items-center justify-between px-2 pb-2">
+            <div class="flex items-center gap-0.5">
+              <button title="Attach" class="p-1.5 rounded-md text-ink-400 hover:text-ink-800 hover:bg-paper2 transition">
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+              </button>
+              <button title="Filter sources" class="px-2 py-1.5 rounded-md text-ink-400 hover:text-ink-800 hover:bg-paper2 transition flex items-center gap-1.5 text-[11px] font-mono">
+                all sources
+              </button>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span id="token-count" class="text-[10px] font-mono text-ink-400">0 / 8k</span>
+              <button id="send-btn" onclick="sendMessage()" class="flex items-center justify-center w-8 h-8 rounded-md bg-moss-500 text-paper hover:bg-moss-600 disabled:opacity-30 disabled:cursor-not-allowed transition">
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <p class="text-center text-[11px] text-ink-400 mt-2.5">
+          AI assistant · not legal advice · always verify against the Official Journal of the EU
+        </p>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+  let inChat = false;
+  const chatScroll = document.getElementById('chat-scroll');
+  const welcome = document.getElementById('welcome');
+  const messages = document.getElementById('messages');
+  const input = document.getElementById('prompt-input');
+  const tokenCount = document.getElementById('token-count');
+
+  function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 192) + 'px';
+    tokenCount.textContent = Math.ceil(el.value.length / 4) + ' / 8k';
+  }
+  function onKey(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  }
+  function toggleSidebar() {
+    const s = document.getElementById('sidebar');
+    s.classList.toggle('hidden');
+    s.classList.toggle('flex');
+    s.classList.toggle('absolute');
+    s.classList.toggle('z-30');
+    s.classList.toggle('h-full');
+  }
+  function newChat() {
+    inChat = false;
+    messages.innerHTML = '';
+    messages.classList.add('hidden');
+    welcome.classList.remove('hidden');
+    input.value = '';
+    autoGrow(input);
+  }
+  function clearRecent() {
+    const list = document.getElementById('recent-list');
+    if (list) list.innerHTML = '';
+  }
+  function sendSuggested(btn) {
+    input.value = btn.dataset.prompt;
+    autoGrow(input);
+    sendMessage();
+  }
+  function scrollBottom() {
+    chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
+  }
+
+  function userBubble(text) {
+    return `
+      <div class="fade-in flex justify-end">
+        <div class="max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5 bg-paper2 text-ink-900 text-[15px] leading-relaxed whitespace-pre-wrap">${escapeHtml(text)}</div>
+      </div>`;
+  }
+
+  function typingBubble() {
+    return `
+      <div id="typing" class="fade-in flex gap-3">
+        <div class="shrink-0 w-7 h-7 rounded-md bg-moss-500 flex items-center justify-center text-paper">
+          <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="1.5"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
+        </div>
+        <div class="flex items-center gap-1 px-3 py-2.5 rounded-2xl rounded-tl-sm bg-paper2 typing">
+          <span class="w-1.5 h-1.5 rounded-full bg-moss-400"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-moss-400"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-moss-400"></span>
+          <span class="ml-1.5 text-[11px] font-mono text-ink-500">retrieving…</span>
+        </div>
+      </div>`;
+  }
+
+  function assistantBubble(html, citations = []) {
+    const cites = citations.map((c, i) => `
+      <button class="citation inline-flex items-center gap-1.5 px-2 py-1 rounded border border-line bg-paper text-[11px] font-mono text-ink-700 transition">
+        <span class="text-moss-500">[${i+1}]</span>
+        <span>${escapeHtml(c.title)}</span>
+      </button>`).join('');
+
+    return `
+      <div class="fade-in flex gap-3">
+        <div class="shrink-0 w-7 h-7 rounded-md bg-moss-500 flex items-center justify-center text-paper">
+          <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="16" height="10" rx="1.5"/><line x1="22" y1="11" x2="22" y2="13"/></svg>
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-ink-900 text-[15px] leading-relaxed">${html}</div>
+          ${citations.length ? `
+            <div class="mt-3">
+              <div class="text-[10px] font-mono uppercase tracking-wider text-ink-400 mb-1.5">Sources</div>
+              <div class="flex flex-wrap gap-1.5">${cites}</div>
+            </div>` : ''}
+          <div class="mt-2 flex items-center gap-0.5 text-ink-400">
+            <button title="Copy" class="p-1.5 rounded hover:bg-paper2 hover:text-ink-800 transition"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+            <button title="Helpful" class="p-1.5 rounded hover:bg-paper2 hover:text-moss-500 transition"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9A2 2 0 0 0 19.72 9H14zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg></button>
+            <button title="Not helpful" class="p-1.5 rounded hover:bg-paper2 hover:text-ink-800 transition"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 1.97 2.3H10zM17 2h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg></button>
+            <button title="Regenerate" class="p-1.5 rounded hover:bg-paper2 hover:text-ink-800 transition"><svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function sendMessage() {
+    const text = input.value.trim();
+    if (!text) return;
+
+    if (!inChat) {
+      welcome.classList.add('hidden');
+      messages.classList.remove('hidden');
+      inChat = true;
+    }
+
+    messages.insertAdjacentHTML('beforeend', userBubble(text));
+    input.value = '';
+    autoGrow(input);
+    scrollBottom();
+
+    messages.insertAdjacentHTML('beforeend', typingBubble());
+    scrollBottom();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: text }),
+      });
+      const data = await res.json();
+
+      const t = document.getElementById('typing');
+      if (t) t.remove();
+
+      const answerHtml = `<p class="leading-relaxed">${escapeHtml(data.answer).replace(/\*(.*?)\*/g, '<em>$1</em>')}</p>`;
+      const citations = (data.sources || []).map(s => ({ title: s, locator: '' }));
+      messages.insertAdjacentHTML('beforeend', assistantBubble(answerHtml, citations));
+    } catch (err) {
+      const t = document.getElementById('typing');
+      if (t) t.remove();
+      messages.insertAdjacentHTML('beforeend', assistantBubble(
+        `<p class="text-red-500">Error: could not reach the backend. Is app.py running?</p>`, []
+      ));
+    }
+    scrollBottom();
+  }
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+      e.preventDefault(); newChat();
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === '/') {
+      e.preventDefault(); input.focus();
+    }
+  });
+
+  window.addEventListener('load', () => input.focus());
+</script>
+</body>
+</html>
